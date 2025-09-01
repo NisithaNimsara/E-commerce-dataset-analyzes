@@ -1,0 +1,291 @@
+---
+title: "Computational Mathematics"
+author: "Nisitha Nimsara"
+date: "2025-08-03"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages({
+  #load the libraries
+  suppressWarnings(library(tidyverse))
+})
+```
+
+```{r}
+#import the csv file
+df <- read.csv("customer_purchases.csv")
+```
+
+#Exploratory Data Analysis(EDA)
+##summary statistics for all numerical variables
+```{r}
+summary(df)
+```
+
+Purchase amount
+Minimun= $10 
+Maximum= $146.69
+Mean≈ $74.69
+Median≈ $74.74
+
+Time spent on site:
+Min= 1 min 
+Max= 20.41 mins
+Median≈ 9.950    
+Mean≈ 9.963
+Most customers spend between 8 and 12 minutes.(1st Qu - 3rd Qu)
+
+Number: of previous purchases
+Mean ≈ 2.02 purchases
+Range: 0 to 9 → some customers are repeat buyers, some are(min - max) first-time.
+
+Used discount:
+55.7% of transactions used a discount code. (mean)
+
+```{r}
+#b. 1-Histogram of purchase_amount with density overlay
+hist(df$purchase_amount, probability = TRUE,
+     main = "Histogram of Purchase Amount with Density",
+     xlab = "Purchase Amount",
+     ylab = "Density (Number of Purchases)",
+     col = "pink",
+     border = "black",
+     breaks = 10)
+lines(density(df$purchase_amount),col="black",lwd=2)
+```
+This show that both low and high spenders are balanced around the average.
+
+```{r}
+#b. 2-Boxplot of time_spent_on_site by region
+boxplot(time_spent_on_site ~ region, data = df,
+        main = "Time Spent on Site by Region",
+        xlab = "Region",
+        ylab = "Time Spent (minutes)",
+        col="pink")
+```
+some regions are engage longer; but most are around 10 minutes. in south region showers more outliers than the rest.
+
+```{r}
+#b. 3-Scatterplot of purchase_amount vs time_spent_on_site
+plot(df$time_spent_on_site, df$purchase_amount,
+     main = "Purchase Amount vs Time Spent on Site",
+     xlab = "Time Spent on Site (minutes)",
+     ylab = "Purchase Amount",
+     pch= 16, col="pink")
+```
+Most customers spend between 6–12 minutes and purchase $60–$90 worth of products.
+
+```{r}
+#c. Identify and handle any missing values
+
+# Count missing per column
+# Count missing values in each column
+colSums(is.na(df))
+```
+No missing values in any column, Data completeness is perfect meaning no imputation or deletion is needed.
+
+```{r}
+#d. Detect and comment on outliers
+
+flag_outliers_iqr <- function(x) {
+  Q1 <- quantile(x, 0.25, na.rm = TRUE)
+  Q3 <- quantile(x, 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+  lower <- Q1 - 1.5 * IQR
+  upper <- Q3 + 1.5 * IQR
+  (x < lower) | (x > upper)
+}
+
+summary_outliers <- df %>% #start with my data freme
+  summarise(across(where(is.numeric), #selects only numeric columns for each.
+                   ~ sum(flag_outliers_iqr(.)), # count of all returns a logical vector of TRUE
+                   .names = "{.col}")) %>% #keeps the result columns named the same as the original
+  pivot_longer(everything(), 
+               names_to = "variable", 
+               values_to = "outlier_count") #Converts that one-row wide summary into long format
+
+summary_outliers
+```
+Detected 14 outliers for purchase_amount, 18 for time_spent_on_site and 15 for number_of_previous_purchases
+
+```{r}
+                    #3.1.2 -Interpretation Guidelines
+#a. Describe the distribution of key variables
+```
+Purchase Amount: Most purchase amounts are between $60 and $90. A few very high purchases (up to $146.69) make the graph slightly skewed to the right. This means most customers buy moderately priced items, but some spend a lot more.
+
+Time Spent on Site: Most customers spend 8–12 minutes browsing. A few outliers spend much longer (up to 20 minutes), which might represent highly engaged customers or those struggling to find what they need.
+
+Number of Previous Purchases: The median is 2 purchases, with a maximum of 9, showing a mix of first-time buyers and repeat customers.
+
+Used Discount: Over 55% of customers used a discount code, indicating that promotional offers are influential in driving sales(customer base may be price-sensitive).
+
+```{r}
+#b. Note any unusual patterns or data quality issues
+```
+No missing values: the dataset is complete.
+Regional Differences: some regions spend more or less time on the site.
+
+```{r}
+                    #3.2 -Probability Analysis
+                    #3.2.1 -Required Calculations
+
+#a. Calculate basic probabilities
+#a. 1-P(Purchase > $75)
+p_purchase_gt_75 <- mean(df$purchase_amount > 75)
+p_purchase_gt_75
+```
+≈49% of customers make purchases above $75, indicating (mid/high value buying tendency).
+
+```{r}
+#b. 2-P(Used Discount | Purchase > $100)
+p_discount_given_gt_100 <- mean(df$used_discount[df$purchase_amount > 100] == 1)
+p_discount_given_gt_100
+```
+≈70% spenders use discounts frequently, meaning price sensitivity.
+
+```{r}
+#b. Create contingency tables:
+#b. 1-Region vs Used Discount
+table(df$region, df$used_discount)
+```
+In all regions, more customers used a discount than didn’t, except in the South where usage is nearly equal. The North and West regions show the highest number of discount users. This suggests that discount offers are popular across regions, but slightly less so in the South.
+
+```{r}
+#b. 2-Previous Purchases vs Discount Usage
+table(df$number_of_previous_purchases, df$used_discount)
+```
+Most customers have 0–3 previous purchases, and in all these groups, discount usage is higher than non-usage. Discount usage is common across all customer loyalty levels, but the number of customers drops sharply after 4 previous purchases.
+
+```{r}
+#c. Calculate conditional probabilities by region
+region_discount <- matrix(c(213,284,
+                             224,294,
+                             233,242,
+                             216,294),
+                           nrow = 4, byrow = TRUE,
+                           dimnames = list(
+                             Region = c("East", "North", "South", "West"),
+                             Discount = c("No", "Yes")
+                           ))
+
+# Conditional probabilities P(Discount | Region)
+prop_region <- prop.table(region_discount, margin = 1)
+print(prop_region)
+```
+East: ~57.2% of customers used discounts.
+North: ~56.8% used discounts.
+South: Only ~50.9% used discounts, almost equal split.
+West: ~57.6% used discounts.
+
+```{r}
+                    #3.2.2 Interpretation Guidelines
+#a. Explain what probabilities reveal about customer behavior
+```
+Most customers use discounts across all regions, with around 57% usage in East, 56%in North, and 57% in West. The South shows a lower discount usage near 51%, suggesting customers there are less likely to use discounts. In summary, this shows discounts are generally effective, but marketing efforts in the South might need improvement.
+
+```{r}
+#b. Compare probabilities across different segments
+```
+Highest: West (57.6%) — slightly more likely than other regions to use discounts.
+Lowest: South (50.9%) — only about half of customers use discounts.
+East and North: Both around 57%, showing similar behavior.
+Gap: There’s about a 6–7 percentage point difference between the highest (West) and lowest (South), indicating a modest but notable variation in discount usage across regions.
+
+```{r}
+#c. Suggest how marketing could target specific groups
+```
+South region – Run targeted ads, local promotions, and short-term deals to raise discount usage.
+
+High purchase history customers – Offer VIP discounts, tiered rewards, and loyalties.
+
+First-time buyers – Give welcome discounts, bundle offers.
+
+High usage regions (East, North, West) – Keep regular promotions, cross-sell with discounts, and link offers to seasonal events.
+
+```{r}
+#d. Discuss limitations of the probability analysis
+```
+ It only looks at one factor at a time and can’t explain why differences happen. The results might not be accurate if the data is incomplete, if some groups are too small, or if customer behavior changes in the future. Also, we didn’t test if small differences are actually important.
+
+```{r}
+                    #3.3 Distribution Fitting
+                    #3.3.1 Required Analysis
+#a. Fit distributions to:
+#a. 1-Poisson for number_of_previous_purchases
+lambda <- mean(df$number_of_previous_purchases)
+
+observed <- table(df$number_of_previous_purchases)
+expected <- dpois(as.numeric(names(observed)), lambda) * nrow(df)
+
+barplot(rbind(observed, expected), beside = TRUE,
+        col = c("pink", "lightblue"), legend.text = c("Observed", "Expected"),
+        main = "Observed Vs Poisson Expected Count",
+        xlab = "Number of Previous Purchases",
+        ylab = "Count")
+```
+The histogram shows how well a Poisson distribution with the observed average matches the actual number of previous purchases. Most customers had 1 to 3 past purchases, and very few had more than that.This suggests that repeat purchases are not very high, and most customers are still early in their buying journey.
+
+```{r}
+#a. 2-Normal for purchase_amount
+hist(df$purchase_amount ,probability = TRUE,
+     main = "Histogram of Purchase Amount with Normal Curve",
+     col = "pink", xlab = "Purchase Amount")
+
+# Add the normal curve
+curve(dnorm(x, mean = mean(df$purchase_amount),
+            sd = sd(df$purchase_amount)),
+      col = "red", lwd = 2, add = TRUE)
+
+qqnorm(df$purchase_amount)
+qqline(df$purchase_amount, col = "red")
+
+```
+The histogram shows that the data follows a fairly symmetrical bell-shaped curve, with most values centered around the mean. This suggests that, customer spending amounts are normally distributed, with most people spending close to the average, and fewer making very small or very large purchases.
+
+```{r}
+                    #3.3.2 Interpretation Guidelines
+#Interpret the Fitted distributions
+```
+overall, purchase amounts are fairly predictable, but past purchase behavior is limited,suggesting an opportunity to improve long-term customer engagement.
+
+```{r}
+                    #3.4 Predictive Modeling
+#Focus on the relationship between purchase_amount and time_spent. Then build a linear regression model:
+#a. Comment on the type of association between time_spent (𝑋-axis) and purchase_amount (𝑌 -axis)
+
+plot(df$time_spent_on_site, df$purchase_amount,
+     main = "Purchase Amount vs Time Spent",
+     xlab = "Time Spent on Site (minutes)",
+     ylab = "Purchase Amount",
+     col = "pink", pch = 16)
+
+# Add regression line
+model <- lm(purchase_amount ~ time_spent_on_site, data = df)
+abline(model, col = "red", lwd = 2)
+```
+There is a positive linear relationship between time spent on the site and purchase amount. This means customers who spend more time tend to make higher purchases.
+
+```{r}
+#b. Obtain the output and the fitted values, and show the regression line over the data
+
+model <- lm(purchase_amount ~ time_spent_on_site, data = df)
+summary(model)
+coef(model)
+```
+
+```{r}
+#c. Write down the fitted equation of the form 𝑌 = 𝛽0 + 𝛽1X
+```
+purchase_amount = 73.4981 + 0.1196 * time_spent_on_site
+
+```{r}
+#d. Predict the purchase_amount for a time_spent of 12 minutes
+purchase_amount = 73.4981 + 0.1196 * 12
+purchase_amount
+```
+This means purchase amount is $74.93 for someone who spends 12 minutes on the site.
+Which means: for every extra minute on the site, the average purchase goes up by about $0.12; In summery, encouraging users to stay on the site longer could lead to slightly higher purchases. 
